@@ -1,0 +1,26 @@
+{
+  "environments": [
+    {
+      "id": "PDV",
+      "env": {
+        "name": "PDV",
+        "nodes": [
+          { "name": "Node 1", "ip": "10.2.16.8" },
+          { "name": "Node 2", "ip": "10.2.16.9" }
+        ],
+        "sudoUser": "applplmd"
+      }
+    },
+    {
+      "id": "PFT",
+      "env": {
+        "name": "PFT",
+        "nodes": [
+          { "name": "Node 1", "ip": "10.2.16.22" },
+          { "name": "Node 2", "ip": "10.2.16.23" }
+        ],
+        "sudoUser": "applplmu"
+      }
+    }
+  ]
+}
