@@ -1,0 +1,159 @@
+#!/bin/bash
+
+set -euo pipefail
+
+trap cleanup EXIT
+trap 'on_error $LINENO $BASH_COMMAND' ERR
+
+cleanup() {
+  local code=$?
+  if [ "$code" -eq 0 ]; then
+    log "✅ Deployment completed successfully."
+  else
+    log "❌ Script exited with error code: $code"
+    log "❌ Deployment Failed."
+  fi
+}
+
+on_error() {
+  local line=$1
+  local cmd=$2
+  log "❌ Error occurred at line $line: $cmd"
+}
+
+if [ "$#" -lt 5 ]; then
+  echo "Usage: $0 <RELEASE> <BRANCH> <WLUSER> <WLPASS> <AUTHTOKEN>" >&2
+  exit 1
+fi
+
+RELEASE="$1"
+BRANCH="$2"
+WLUSER="$3"
+WLPASS="$4"
+AUTHTOKEN="$5"
+
+log() {
+  echo "[`date '+%Y-%m-%d %H:%M:%S'`] $1"
+}
+
+download_file() {
+  local URL="$1?ref=$BRANCH"
+  local TOKEN="$AUTHTOKEN"
+  local FILENAME="${1##*/}"
+
+  log "Attempting to download: $FILENAME"
+
+  HTTP_STATUS=$(curl -L -w "%{http_code}" -o "$FILENAME" \
+    -H "Accept: application/vnd.github.v3.raw" \
+    -H "Authorization: Bearer $TOKEN" \
+    "$URL" 2>/dev/null)
+
+  CURL_EXIT_CODE=$?
+
+  if [ "$CURL_EXIT_CODE" -ne 0 ]; then
+    echo "❌ curl failed with exit code $CURL_EXIT_CODE" >&2
+    exit 1
+  fi
+
+  if [ "$HTTP_STATUS" -ne 200 ]; then
+    echo "❌ Failed to download file. HTTP Status Code: $HTTP_STATUS" >&2
+    exit 1
+  fi
+
+  log "✅ File downloaded successfully: $FILENAME"
+}
+
+
+GITHUB_API="https://github.biogen.com/api/v3/repos/agile-plm"
+
+source "$RELEASE.sh"
+
+if [ "${#config_file_urls[@]}" -eq 0 ]; then
+  log "Skipping Config deployment."
+  echo "----------------------------------------------------"
+else
+  log "Deploying config files"
+  cd /u11/agile/agile936/agileDomain/config/px-config/
+  for url in "${config_file_urls[@]}"; do
+    download_file "$url"
+  done
+  echo "----------------------------------------------------"
+fi
+
+if [ "${#jar_urls[@]}" -eq 0 ]; then
+  log "Skipping Jar deployment."
+  echo "----------------------------------------------------"
+else
+  log "Deploying Jar files"
+  cd /u11/agile/agile936/integration/sdk/extensions/
+  for url in "${jar_urls[@]}"; do
+    download_file "$url"
+  done
+  echo "----------------------------------------------------"
+fi
+
+log "NODE: $NODE"
+
+if [ "${#war_deployments[@]}" -eq 0 ]; then
+  log "Skipping War deployment."
+  echo "----------------------------------------------------"
+else
+  if [[ "$NODE" == "primary" ]]; then
+    log "Deploying Webforms on Weblogic"
+    log "AGILECLUSTER: $AGILECLUSTER WEBLOGICADMINURL: $WEBLOGICADMINURL"
+
+    DEPLOYER="java -cp /u11/agile/agile936/agileDomain/lib/wlsauth.jar:/u11/middleware/12214/wlserver/server/lib/weblogic.jar weblogic.Deployer -adminurl $WEBLOGICADMINURL -user $WLUSER -password $WLPASS"
+
+    cd /u11/agile/agile936/integration/sdk/extensions/
+    for war_name in "${!war_deployments[@]}"; do
+        war_url="${war_deployments[$war_name]}"
+        war_file="${war_url##*/}"
+
+        log "Starting deployment for: $war_name from $war_url"
+
+        if download_file "$war_url"; then
+            log "✅ Downloaded: $war_file"
+
+            ls -lrt "$war_file"
+
+            $DEPLOYER -name "$war_name" -source "$war_file" -redeploy -verbose -targets "$AGILECLUSTER"
+            if [[ $? -eq 0 ]]; then
+                log "✅ Successfully deployed: $war_name"
+            else
+                log "❌ Deployment failed for: $war_name"
+            fi
+        else
+            log "❌ Failed to download WAR for: $war_name"
+        fi
+
+        echo "----------------------------------------------------"
+    done  
+  else
+    echo "WAR file deployment not required on $NODE node."
+  fi
+fi
+
+if [ "${#web_form_deployments[@]}" -eq 0 ]; then
+  log "Skipping Webform deployment."
+  echo "----------------------------------------------------"
+else
+  log "Deploying standalone webforms."
+  if [[ "$NODE" == "secondary" ]]; then
+    for wf_dir in "${!web_form_deployments[@]}"; do
+      wf_jar="${web_form_deployments[$wf_dir]}"
+      wf_ctrl="$(echo "$wf_jar" | sed -E 's#(https://.*/contents).*#\1/appctrl.sh#')"
+   
+      mkdir -p "/u11/agile/webforms/$wf_dir"
+      pushd "/u11/agile/webforms/$wf_dir" > /dev/null
+
+      download_file "$wf_jar"
+      download_file "$wf_ctrl"
+      chmod +x appctrl.sh
+
+      popd > /dev/null
+      echo "----------------------------------------------------"
+    done
+  else
+    echo "Webform deployment not required on $NODE node."
+  fi
+fi

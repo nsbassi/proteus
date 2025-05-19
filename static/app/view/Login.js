@@ -59,13 +59,12 @@ Ext.define("Proteus.view.Login", {
         },
         {
           xtype: "textfield",
-          allowBlank: false,
+          validateOnInit: false,
           required: true,
           width: 280,
           label: "Linux OS User",
           name: "username",
           placeholder: "OS username",
-          value: "adm-nbassi",
           errorTarget: "side",
           style: {
             margin: "auto",
@@ -73,13 +72,12 @@ Ext.define("Proteus.view.Login", {
         },
         {
           xtype: "passwordfield",
-          allowBlank: false,
+          validateOnInit: false,
           required: true,
           width: 280,
           label: "Password",
           name: "password",
           placeholder: "Password",
-          value: "d=3gHDK32l]$fQo1g#1VQ8#)",
           errorTarget: "side",
           style: {
             margin: "auto",
@@ -87,13 +85,12 @@ Ext.define("Proteus.view.Login", {
         },
         {
           xtype: "passwordfield",
-          allowBlank: false,
+          validateOnInit: false,
           required: true,
           width: 280,
           label: "GitHub Token",
           name: "token",
           placeholder: "Auth Token",
-          value: "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",
           errorTarget: "side",
           style: {
             margin: "auto",
@@ -101,7 +98,7 @@ Ext.define("Proteus.view.Login", {
         },
         {
           xtype: "combobox",
-          allowBlank: false,
+          validateOnInit: false,
           required: true,
           width: 280,
           label: "Environment",
@@ -113,10 +110,12 @@ Ext.define("Proteus.view.Login", {
           },
           displayField: "id",
           valueField: "env",
+          value: "PFT",
           forceSelection: true,
         },
         {
           xtype: "button",
+          cls: "p-button",
           text: "LOG IN",
           autoSize: true,
           handler: "onLogin",

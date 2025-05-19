@@ -1,0 +1,64 @@
+{
+  "environments": [
+    {
+      "id": "PDV",
+      "env": {
+        "name": "PDV",
+        "nodes": [
+          { "name": "Node 1", "ip": "10.2.16.8", "idx": 1 },
+          { "name": "Node 2", "ip": "10.2.16.9", "isWFHost": true, "idx": 2 }
+        ],
+        "sudoUser": "applplmd",
+        "branch": "dev"
+      }
+    },
+    {
+      "id": "PJ2",
+      "env": {
+        "name": "PJ2",
+        "nodes": [
+          { "name": "Node 1", "ip": "10.2.16.95", "idx": 1 },
+          { "name": "Node 2", "ip": "10.2.16.97", "isWFHost": true, "idx": 2 }
+        ],
+        "sudoUser": "applplmi1",
+        "branch": "dev"
+      }
+    },
+    {
+      "id": "PFT",
+      "env": {
+        "name": "PFT",
+        "nodes": [
+          { "name": "Node 1", "ip": "10.2.16.22", "idx": 1 },
+          { "name": "Node 2", "ip": "10.2.16.23", "isWFHost": true, "idx": 2 }
+        ],
+        "sudoUser": "applplmu",
+        "branch": "dev"
+      }
+    },
+    {
+      "id": "PQA",
+      "env": {
+        "name": "PQA",
+        "nodes": [
+          { "name": "Node 1", "ip": "10.2.16.55", "idx": 1 },
+          { "name": "Node 2", "ip": "10.2.16.56", "isWFHost": true, "idx": 2 }
+        ],
+        "sudoUser": "applplmq",
+        "branch": "qa"
+      }
+    },
+    {
+      "id": "PROD",
+      "env": {
+        "name": "PROD",
+        "nodes": [
+          { "name": "Node 1", "ip": "10.2.17.12", "idx": 1 },
+          { "name": "Node 2", "ip": "10.2.17.13", "isWFHost": true, "idx": 2 }
+        ],
+        "sudoUser": "applplmp",
+        "branch": "master"
+      }
+    }
+  ]
+}

@@ -1,151 +1,283 @@
-from flask import Flask, request, session, redirect, url_for, jsonify
-import paramiko
-import requests
 import time
-from flask_cors import CORS
-import re
+import os
+import sys
+from flask import Flask, request, session, redirect, url_for, jsonify, send_from_directory
+from models import Domain, AuthException
+from github_utils import validate_github_token, getRepoContents
+from ssh_utils import create_client, ssh_authenticate, read_shell_output, execute_iq_cmd, execute_cmd_as, execute_setup, execute_acp_cmd
+from ssh_utils import SCRDIR
+import traceback
 
-app = Flask(__name__)
-CORS(app, origins=["http://127.0.0.1:5500"], supports_credentials=True)
-app.secret_key = 'supersecretkey'
+app = Flask(__name__, static_folder=None)
+app.secret_key = os.urandom(24).hex()
+
+ACPHOST = "10.2.16.22"
+ACPUSER = "applplmu"
+AGHOME = "/u11/agile/agile936/agileDomain"
 
 
-GITHUB_URL = "https://github.biogen.com"
+def get_static_dir():
+    local_static = os.path.join(os.getcwd(), "static")
+    if os.path.exists(local_static):
+        return local_static
+    if hasattr(sys, '_MEIPASS'):
+        return os.path.join(sys._MEIPASS, "static")
+    return "static"
+
+
+STATIC_DIR = get_static_dir()
+
+
+@app.route('/static/<path:filename>')
+def custom_static(filename):
+    return send_from_directory(STATIC_DIR, filename)
+
+
+@app.route('/', methods=['GET'])
+def serve_index():
+    base_path = os.path.abspath(os.path.dirname(__file__))
+    return send_from_directory(base_path, 'index.html')
 
 
 @app.route('/login', methods=['POST'])
 def login():
-    data = request.json
-    username = data['username']
-    password = data['password']
-    hostname = data['environment']['nodes'][0]['ip']
-    athtoken = data['token']
-    sudouser = data['environment']['sudoUser']
+    domain = Domain(request.json)
 
-    valid_token, github_username = validate_github_token(athtoken)
+    valid_token, github_username, message = validate_github_token(domain)
     if not valid_token:
-        return jsonify({"error": "Invalid GitHub token"}), 401
+        return jsonify({"error": message}), 500
+    else:
+        domain.gitUser = github_username
 
-    if ssh_authenticate(username, password, hostname, sudouser):
-        session['username'] = username
-        session['hostname'] = hostname
+    if ssh_authenticate(domain):
+        session['domain'] = domain.to_dict()
         return jsonify({"message": "Login successful", "user": github_username}), 200
     else:
-        return jsonify({"error": "Login Failed"}), 401
+        return jsonify({"error": f"Failed to login as {domain.osuser} to host {domain.env['nodes'][0]['ip']}"}), 500
+
+
+@app.route('/restoreSession', methods=['GET'])
+def restoreSession():
+    try:
+        d = getDomain()
+        return jsonify({"env": d.env, "gituser": d.gitUser, "osuser": d.osuser})
+    except Exception as e:
+        return jsonify({"error": 'Invalid session state'}), 401
+
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("/"))
+
+
+@app.route('/getYears', methods=['GET'])
+def getYears():
+    domain = getDomain()
+    acpStatus, acpResp = getRepoContents(domain, 'acp')
+    iqStatus, iqResp = getRepoContents(domain, 'iq')
+
+    if acpStatus == 200 and iqStatus == 200:
+        acpFiles = acpResp.json()
+        ipFiles = iqResp.json()
+
+        iqYears = [{"id": file['name']}
+                   for file in acpFiles if file['type'] == 'dir']
+        acpYears = [{"id": file['name']}
+                    for file in ipFiles if file['type'] == 'dir']
+        combined_years = list(
+            {year['id']: year for year in iqYears + acpYears}.values())
+
+        return jsonify(combined_years)
+    else:
+        return jsonify({"error": "Failed to fetch Years from Github"}), max(acpStatus, iqStatus)
+
+
+@app.route('/getReleases', methods=['GET'])
+def getReleases():
+    year = request.args.get('year')
+    domain = getDomain()
+
+    acpStatus, acpResp = getRepoContents(domain, 'acp', year)
+    iqStatus, iqResp = getRepoContents(domain, 'iq', year)
+
+    if acpStatus == 200 and iqStatus == 200:
+        acpFiles = acpResp.json()
+        ipFiles = iqResp.json()
+
+        iqReleases = [{"id": file['name'].replace(".xml", "")}
+                      for file in acpFiles if file['type'] == 'file' and file['name'].endswith(".xml")]
+        acpReleases = [{"id": file['name'].replace(".sh", "")}
+                       for file in ipFiles if file['type'] == 'file' and file['name'].endswith(".sh")]
+        combined_releases = list(
+            {release['id']: release for release in iqReleases + acpReleases}.values())
+        return jsonify(combined_releases)
+    else:
+        return jsonify({"error": "Failed to get Releases from Github"}), max(acpStatus, iqStatus)
 
 
 @app.route('/getReleaseDetails', methods=['POST'])
 def getReleaseDetails():
-    try:
-        data = request.json
-        token = data['token']
-        env = data['env'] or 'prod'
-        branch = get_branch(env)
-        year = data['year']
-        release = data['release']
+    year, release = request.json['year'], request.json['release']
+    domain = getDomain()
 
-        acp_url = f"{GITHUB_URL}/api/v3/repos/agile-plm/acp-repo/contents/acp-repo/src/{year}/{release}.xml?ref={branch}"
-        iq_url = f"{GITHUB_URL}/api/v3/repos/agile-plm/iq-repo/contents/src/{year}/{release}.sh?ref={branch}"
-        headers = {"Authorization": f"token {token}"}
+    acpStatus, acpResp = getRepoContents(domain, 'acp', year, release)
+    iqStatus, iqResp = getRepoContents(domain, 'iq', year, release)
 
-        acp_response = requests.get(acp_url, headers=headers)
-        iq_response = requests.get(iq_url, headers=headers)
-
-        result = {
-            "acp": acp_response.status_code == 200,
-            "iq": iq_response.status_code == 200
-        }
-
-        return jsonify(result)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    return jsonify({
+        "acp": acpStatus == 200,
+        "iq": iqStatus == 200
+    })
 
 
-@app.route('/runACP', methods=['POST'])
-def runACP():
-    data = request.json
-    username = data['username']
-    password = data['password']
-    env = data['env']
-    year = data['year']
-    release = data['release']
-    branch = get_branch(env)
-    nodes = data['nodes']
-    athtoken = data['token']
+@app.route('/setupFileIQ', methods=['POST'])
+def setupFileIQ():
+    y, r = (request.json.get(k) for k in ('year', 'release'))
 
-    try:
-        client = paramiko.SSHClient()
-        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    domain = getDomain()
+    t, b = domain.gitToken, domain.gitBranch
 
-        return jsonify({"error": "Failed to fetch files"}), max(response.status_code, response1.status_code)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    cl, ch = create_client(domain, ACPHOST, ACPUSER)
+    iq_ready, output = execute_setup(ch, y, r, b, 'IQ', t)
+    cl.close()
+
+    outcome = "error" if not iq_ready else "success"
+    return jsonify({"outcome": outcome, "output": output})
 
 
-@app.route('/getYears', methods=['POST'])
-def getYears():
-    try:
-        data = request.json
-        token = data['token']
-        branch = get_branch(data['env'] or 'prod')
+@app.route('/deployFiles', methods=['POST'])
+def deployFiles():
+    r, wbUser, wbPass, node = (request.json.get(k)
+                               for k in ('release', 'wbUser', 'wbPass', 'node'))
 
-        url = f"{GITHUB_URL}/api/v3/repos/agile-plm/acp-repo/contents/acp-repo/src?ref={branch}"
-        headers = {"Authorization": f"token {token}"}
-        response = requests.get(url, headers=headers)
+    domain = getDomain()
+    t, b, user = domain.gitToken, domain.gitBranch, domain.env['sudoUser']
 
-        url1 = f"{GITHUB_URL}/api/v3/repos/agile-plm/iq-repo/contents/src?ref={branch}"
-        response1 = requests.get(url1, headers=headers)
+    client, channel = create_client(domain, node['ip'], user)
+    output, outcome = execute_iq_cmd(client, channel, r, b, wbUser, wbPass, t)
+    client.close()
 
-        if response.status_code == 200 and response1.status_code == 200:
-            files = response.json()
-            files1 = response1.json()
-
-            years = [{"id": file['name']}
-                     for file in files if file['type'] == 'dir']
-            years1 = [{"id": file['name']}
-                      for file in files1 if file['type'] == 'dir']
-
-            # Combine lists and remove duplicates
-            combined_years = {
-                year['id']: year for year in years + years1}.values()
-
-            return jsonify(list(combined_years))
-        else:
-            return jsonify({"error": "Failed to fetch files"}), max(response.status_code, response1.status_code)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    return jsonify({"outcome": outcome, "node": node, "output": output})
 
 
-@app.route('/getReleases', methods=['POST'])
-def getReleases():
-    try:
-        data = request.json
-        token = data['token']
-        year = data['year']
-        branch = get_branch(data['env'] or 'prod')
+@app.route('/exportCfg', methods=['POST'])
+def exportCfg():
+    y, r, f, c, p = (request.json.get(k)
+                     for k in ('year', 'release', 'fromEnv', 'deepCompare', 'fromPass'))
 
-        url = f"{GITHUB_URL}/api/v3/repos/agile-plm/acp-repo/contents/acp-repo/src/{year}?ref={branch}"
-        headers = {"Authorization": f"token {token}"}
-        response = requests.get(url, headers=headers)
+    domain = getDomain()
+    t, b = domain.gitToken, domain.gitBranch
 
-        url1 = f"{GITHUB_URL}/api/v3/repos/agile-plm/iq-repo/contents/src/{year}?ref={branch}"
-        response1 = requests.get(url1, headers=headers)
+    client, channel = create_client(domain, ACPHOST, ACPUSER)
 
-        if response.status_code == 200 and response1.status_code == 200:
-            files = response.json()
-            files1 = response1.json()
+    acp_ready, output = execute_setup(channel, y, r, b, 'ACP', t)
 
-            releases = [{"id": file['name'].replace(".xml", "")}
-                        for file in files if file['type'] == 'file' and file['name'].endswith(".xml")]
-            releases1 = [{"id": file['name'].replace(".sh", "")}
-                         for file in files1 if file['type'] == 'file' and file['name'].endswith(".sh")]
-            combined_releases = {
-                release['id']: release for release in releases + releases1}.values()
-            return jsonify(list(combined_releases))
-        else:
-            return jsonify({"error": "Failed to fetch files"}), max(response.status_code, response1.status_code)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    if (not acp_ready):
+        return jsonify({"outcome": "error",  "fromEnv": f.upper(), "output": output})
+
+    output, outcome = execute_acp_cmd(
+        client, channel, f'./acp export {f.lower()}\n', p, r)
+    client.close()
+
+    return jsonify({"outcome": outcome, "fromEnv": f.upper(), "output": output})
+
+
+@app.route('/deepCmp', methods=['POST'])
+def deepCmp():
+    r, f, p = (request.json.get(k)
+               for k in ('release', 'fromEnv', 'toPass'))
+    domain = getDomain()
+    t = domain.env['name'].lower()
+
+    client, channel = create_client(domain, ACPHOST, ACPUSER)
+
+    output, outcome = execute_acp_cmd(client,
+                                      channel, f'./acp deep_compare {f.lower()} {t}\n', p, r)
+
+    return jsonify({"outcome": outcome, "fromEnv": f.upper(), "toEnv": t.upper(), "output": output})
+
+
+@app.route('/importCfg', methods=['POST'])
+def importCfg():
+    r, f, p = (request.json.get(k)
+               for k in ('release', 'fromEnv', 'toPass'))
+    domain = getDomain()
+    t = domain.env['name'].lower()
+
+    client, channel = create_client(domain, ACPHOST, ACPUSER)
+
+    output, outcome = execute_acp_cmd(client,
+                                      channel, f'./acp import {f.lower()} {t}\n', p, r)
+
+    return jsonify({"outcome": outcome, "fromEnv": f.upper(), "toEnv": t.upper(), "output": output})
+
+
+@app.route('/stopNode', methods=['POST'])
+def stopNode():
+    idx, host, domain = request.json.get(
+        'idx'), request.json.get('ip'), getDomain()
+    client, channel = create_client(domain, host)
+    cmd, user = f'~/bin/stopagileManaged{idx}\n', domain.env['sudoUser']
+
+    output, error = execute_cmd_as(client, cmd, user)
+    client.close()
+
+    return jsonify({"outcome": "success", "output": output})
+
+
+@app.route('/startNode', methods=['POST'])
+def startNode():
+    idx, host, domain = request.json.get(
+        'idx'), request.json.get('ip'), getDomain()
+    user = domain.env['sudoUser']
+    client, channel = create_client(domain, host, user)
+
+    channel.send(f'~/bin/startagileManaged{idx}\n')
+    time.sleep(2)
+    output = read_shell_output(channel)
+    client.close()
+
+    client, channel = create_client(domain, host)
+    output1, error = execute_cmd_as(client, f"{SCRDIR}/checkStatus", user)
+    client.close()
+    if 'URL is up and accessible.' in output1:
+        return jsonify({"outcome":  "success", "output": output + '\n' + output1})
+    else:
+        return jsonify({"outcome":  "error", "output": output + '\n' + output1})
+
+
+@app.route('/startWebforms', methods=['POST'])
+def startWebforms():
+    domain = getDomain()
+    client, channel = create_client(domain, None, domain.env['sudoUser'])
+
+    output, outcome = execute_acp_cmd(client,
+                                      channel, f'./acp import {f} {t}\n', p, r)
+
+    return jsonify({"outcome": outcome, "fromEnv": f.upper(), "toEnv": t.upper(), "output": output})
+
+
+@app.errorhandler(AuthException)
+def handle_auth_exception(error):
+    return jsonify({
+        "error": "Invalid Session",
+        "message": "Your session is invalid. Please log in again."
+    }), 401
+
+
+@app.errorhandler(Exception)
+def handle_exception(e):
+    stack_trace = traceback.format_exc()
+    print("Exception stack trace as string:")
+    print(stack_trace)
+    return jsonify({"error": str(e)}), 500
+
+
+def getDomain():
+    domain_data = session.get('domain')
+    if not domain_data:
+        raise AuthException("Invalid session state")
+    return Domain.from_dict(domain_data)
 
 
 def get_branch(env):
@@ -157,41 +289,5 @@ def get_branch(env):
         return 'dev'
 
 
-def validate_github_token(token):
-    url = f"{GITHUB_URL}/api/v3/user"
-    headers = {"Authorization": f"token {token}"}
-    response = requests.get(url, headers=headers)
-
-    if response.status_code == 200:
-        user_data = response.json()
-        return True, user_data.get("login")
-    return False, None
-
-
-def ssh_authenticate(username, password, hostname, sudo_user="root"):
-    try:
-        client = paramiko.SSHClient()
-        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        client.connect(hostname, username=username, password=password)
-
-        channel = client.invoke_shell()
-        channel.send(f"sudo su - {sudo_user}\n")
-        time.sleep(3)
-
-        output = channel.recv(1024).decode().strip()
-        print("Output:", output)
-
-        client.close()
-
-        # Check if the output contains 'Last login:' using regex
-        if re.search(r'Last login:', output):
-            return True
-        else:
-            return False
-    except Exception as e:
-        print("SSH Error:", str(e))
-        return False
-
-
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(host='0.0.0.0', port=5053, debug=True)

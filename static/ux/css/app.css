@@ -180,3 +180,86 @@ div.searchResultItem button.action-button-disabled {
   line-height: 24px;
   vertical-align: middle;
 }
+
+.custom-mask {
+  background: url("../images/loading.gif") center center no-repeat;
+  background-size: 50px 50px;
+}
+
+.hidden {
+  display: none;
+}
+
+.p-button.x-button-action .x-inner-el {
+  background-color: black;
+  background-image: none;
+  border-color: black;
+}
+
+.action-log .info {
+  color: #1ca2f0;
+}
+
+.action-log .success {
+  color: #136948;
+}
+
+.action-log .warning {
+  color: #e07844;
+}
+
+.action-log .danger {
+  color: #dd4141;
+}
+
+.action-log .muted {
+  color: #7f82ea;
+}
+
+.action-log {
+  font-size: larger;
+  width: 100%;
+}
+
+.log-entry {
+  display: flex;
+  align-items: flex-start; /* Aligns icons with the first line of text */
+}
+
+.icon-container {
+  display: flex;
+  align-items: center;
+  margin-right: 5px; /* Space between icons and text */
+  min-width: 30px; /* Ensures consistent alignment */
+  padding-top: 6px;
+}
+.icon-container .icon {
+  margin-left: 5px;
+  font-style: normal;
+  font-size: large;
+}
+
+.icon-container .toggle-details {
+  font-size: small;
+  color: #abacd2;
+  cursor: pointer;
+  margin-right: 5px;
+}
+
+.message {
+  flex: 1;
+  font-size: larger;
+  word-wrap: break-word;
+  line-height: 1.4; /* Adjusts spacing for better alignment */
+}
+
+.details {
+  margin-left: 45px;
+  max-height: 200px;
+  font-size: smaller;
+  color: #555;
+  margin-top: 5px;
+  overflow-y: auto;
+  background-color: #fff;
+  padding: 5px;
+}

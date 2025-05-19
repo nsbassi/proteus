@@ -8,7 +8,7 @@ Ext.define("Proteus.view.LoginViewModel", {
 
   stores: {
     Environments: {
-      autoLoad: true,
+      autoLoad: false,
       fields: ["id", "env"],
       sorters: ["id"],
       proxy: {
@@ -17,6 +17,13 @@ Ext.define("Proteus.view.LoginViewModel", {
         reader: {
           type: "json",
           rootProperty: "environments",
+        },
+      },
+      listeners: {
+        beforeload: function (store) {
+          if (store.isLoaded() && store.count() > 0) {
+            return false;
+          }
         },
       },
     },
