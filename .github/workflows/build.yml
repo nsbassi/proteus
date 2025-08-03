@@ -45,3 +45,4 @@ jobs:
           author_email: github-actions@github.com
           message: "Add updated built binary"
           add: "dist/proteus"
+          force: true
