@@ -44,5 +44,4 @@ jobs:
           author_name: github-actions
           author_email: github-actions@github.com
           message: "Add updated built binary"
-          add: "dist/proteus"
-          force: true
+          add: "-f dist/proteus"
