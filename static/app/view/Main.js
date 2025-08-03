@@ -44,13 +44,16 @@ Ext.define("Proteus.view.Main", {
           xtype: "container",
           layout: "center",
           tpl: new Ext.XTemplate(
-            '<div style="margin: 20px 0 10px 0">',
+            '<div class="copy-container" style="margin: 20px 0 10px 0;">',
+            '<div class="copy-content">',
             "<strong>Environment: </strong> <em>{environment}</em><br>",
             '<tpl for="nodes">',
-            "<strong> {name}: </strong> <em>{ip}</em><br>",
+            "<strong>{name}: </strong> <em>{ip}</em><br>",
             "</tpl>",
-            "<strong> Privileged User: </strong> <em>{sudouser}</em><br>",
-            "<strong> GitHub User: </strong> <em>{gituser}</em>",
+            "<strong>Privileged User: </strong> <em>{sudouser}</em><br>",
+            "<strong>GitHub User: </strong> <em>{gituser}</em>",
+            "</div>",
+            '<span class="fa fa-copy copy-icon" title="Copy"></span>',
             "</div>"
           ),
           bind: {
@@ -62,9 +65,13 @@ Ext.define("Proteus.view.Main", {
               sudouser: "{env.sudoUser}",
             },
           },
+          listeners: {
+            initialize: "addCopyIcon",
+          },
         },
         {
           xtype: "release",
+          id: "releasePanel",
           reference: "release",
         },
       ],
@@ -72,6 +79,7 @@ Ext.define("Proteus.view.Main", {
     {
       xtype: "panel",
       flex: 1,
+      scrollable: true,
       title: {
         text: "Action Log",
         style: {

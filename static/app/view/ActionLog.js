@@ -5,10 +5,12 @@ Ext.define("Proteus.view.ActionLog", {
   config: {
     items: [],
   },
-
+  listeners: {
+    initialize: "addCopyIcon",
+  },
   tpl: [
     '<tpl for="items">',
-    '<div class="action-log">',
+    '<div class="action-log copy-container">',
     '  <div class="log-entry">',
     '    <div class="icon-container">',
     '      <tpl if="values.details">',
@@ -21,7 +23,11 @@ Ext.define("Proteus.view.ActionLog", {
     '    <div class="message">{msg}</div>',
     "  </div>",
     '  <tpl if="values.details">',
-    '    <pre class="details hidden">{details}</pre>',
+    '    <pre class="details hidden copy-content">{details}</pre>',
+    '    <tpl if="values.filename">',
+    '    <span class="fa fa-save save-icon" title="Download Log" data-file="{filename}"></span>',
+    "    </tpl>",
+    '    <span class="fa fa-copy copy-icon" title="Copy"></span>',
     "  </tpl>",
     "</div>",
     "</tpl>",

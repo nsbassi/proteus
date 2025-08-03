@@ -44,7 +44,7 @@ RUN /usr/local/bin/python3.6 -m ensurepip && \
 
 # Set working directory and copy your project
 WORKDIR /app
-# COPY . /app
+# COPY . /apppwd
 
 # COPY requirements.txt /app/
 # RUN /usr/local/bin/python3.6 -m pip install -r requirements.txt

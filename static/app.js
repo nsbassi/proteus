@@ -1,5 +1,8 @@
 Ext.Loader.setConfig({
-  Ext: ".",
+  enabled: true,
+  paths: {
+    Proteus: "/static/app",
+  },
 });
 
 Ext.application({
@@ -14,7 +17,7 @@ Ext.application({
     if (loggedIn) {
       try {
         const response = await Ext.Ajax.request({
-          url: "/restoreSession",
+          url: Proteus.util.Client.buildURL("/restoreSession"),
           method: "GET",
         });
 

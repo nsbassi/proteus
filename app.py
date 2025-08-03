@@ -4,22 +4,26 @@ import sys
 from flask import Flask, request, session, redirect, url_for, jsonify, send_from_directory
 from models import Domain, AuthException
 from github_utils import validate_github_token, getRepoContents
-from ssh_utils import create_client, ssh_authenticate, read_shell_output, execute_iq_cmd, execute_cmd_as, execute_setup, execute_acp_cmd
-from ssh_utils import SCRDIR
+from ssh_utils import create_client, ssh_authenticate, read_shell_output, execute_iq_cmd
+from ssh_utils import execute_cmd_as, execute_setup, execute_acp_cmd
+from ssh_utils import SCRDIR, list_files, downloadFile
 import traceback
+import tempfile
+from flask import send_file
+
 
 app = Flask(__name__, static_folder=None)
 app.secret_key = os.urandom(24).hex()
 
-ACPHOST = "10.2.16.22"
-ACPUSER = "applplmu"
-AGHOME = "/u11/agile/agile936/agileDomain"
+# Read context path, host, and port from env or sys.argv
+CONTEXT_PATH = os.environ.get("PROTEUS_CONTEXT_PATH", "/proteus")
+PORT = int(os.environ.get("PROTEUS_PORT", 4053))
+ACPHOST = os.environ.get("ACPHOST", "10.2.16.22")
+ACPUSER = os.environ.get("ACPUSER", "applplmu")
+AGHOME = os.environ.get("AGHOME", "/u11/agile/agile936/agileDomain")
 
 
 def get_static_dir():
-    local_static = os.path.join(os.getcwd(), "static")
-    if os.path.exists(local_static):
-        return local_static
     if hasattr(sys, '_MEIPASS'):
         return os.path.join(sys._MEIPASS, "static")
     return "static"
@@ -28,21 +32,69 @@ def get_static_dir():
 STATIC_DIR = get_static_dir()
 
 
-@app.route('/static/<path:filename>')
+@app.route(f'{CONTEXT_PATH}/static/<path:filename>')
 def custom_static(filename):
-    return send_from_directory(STATIC_DIR, filename)
+    # Check if file exists in static folder in current directory
+    local_static = os.path.join(os.getcwd(), "static")
+    local_path = os.path.join(local_static, filename)
+    if os.path.isfile(local_path):
+        return send_from_directory(local_static, filename)
+    # Else serve from embedded static directory (PyInstaller, etc.)
+    embedded_static = os.path.join(get_static_dir(), filename)
+    if os.path.isfile(embedded_static):
+        return send_from_directory(get_static_dir(), filename)
+    jsonify({"error": "File not found"}), 404
 
 
-@app.route('/', methods=['GET'])
+@app.route(f'{CONTEXT_PATH}/app/<path:filename>')
+def custom_static_app(filename):
+    return static_file_path('app', filename)
+
+
+@app.route(f'{CONTEXT_PATH}/resources/<path:filename>')
+def custom_static_res(filename):
+    return static_file_path('resources', filename)
+
+
+@app.route(f'{CONTEXT_PATH}/data/<path:filename>')
+def custom_static_data(filename):
+    return static_file_path('data', filename)
+
+
+def static_file_path(dir, filename):
+    dirPath = os.path.join(os.getcwd(), "static", dir)
+    if os.path.isfile(os.path.join(dirPath, filename)):
+        return send_from_directory(dirPath, filename)
+    else:
+        dirPath = os.path.join(get_static_dir(), dir, filename)
+        if os.path.isfile(os.path.join(dirPath, filename)):
+            return send_from_directory(dirPath, filename)
+    return jsonify({"error": "File not found"}), 404
+
+
+@app.route(f'{CONTEXT_PATH}/', methods=['GET'])
 def serve_index():
-    base_path = os.path.abspath(os.path.dirname(__file__))
-    return send_from_directory(base_path, 'index.html')
+    local_static = os.path.join(os.getcwd(), "static")
+    index_path = os.path.join(local_static, 'index.html')
+    if not os.path.isfile(index_path):
+        index_path = os.path.join(get_static_dir(), 'index.html')
+
+    with open(index_path, 'r', encoding='utf-8') as f:
+        html = f.read()
+    # Inject meta tag just before </head>
+    meta_tag = f'<meta name="X-Proteus-Context" content="{CONTEXT_PATH}">'
+    if "</head>" in html:
+        html = html.replace("</head>", f"    {meta_tag}\n</head>")
+    else:
+        # fallback: add at the top if no </head> found
+        html = meta_tag + "\n" + html
+    return html, 200, {'Content-Type': 'text/html'}
 
 
-@app.route('/login', methods=['POST'])
+@app.route(f'{CONTEXT_PATH}/login', methods=['POST'])
 def login():
     domain = Domain(request.json)
-
+    print(domain)
     valid_token, github_username, message = validate_github_token(domain)
     if not valid_token:
         return jsonify({"error": message}), 500
@@ -56,7 +108,7 @@ def login():
         return jsonify({"error": f"Failed to login as {domain.osuser} to host {domain.env['nodes'][0]['ip']}"}), 500
 
 
-@app.route('/restoreSession', methods=['GET'])
+@app.route(f'{CONTEXT_PATH}/restoreSession', methods=['GET'])
 def restoreSession():
     try:
         d = getDomain()
@@ -65,13 +117,13 @@ def restoreSession():
         return jsonify({"error": 'Invalid session state'}), 401
 
 
-@app.route("/logout")
+@app.route(f"{CONTEXT_PATH}/logout")
 def logout():
     session.clear()
     return redirect(url_for("/"))
 
 
-@app.route('/getYears', methods=['GET'])
+@app.route(f'{CONTEXT_PATH}/getYears', methods=['GET'])
 def getYears():
     domain = getDomain()
     acpStatus, acpResp = getRepoContents(domain, 'acp')
@@ -93,7 +145,7 @@ def getYears():
         return jsonify({"error": "Failed to fetch Years from Github"}), max(acpStatus, iqStatus)
 
 
-@app.route('/getReleases', methods=['GET'])
+@app.route(f'{CONTEXT_PATH}/getReleases', methods=['GET'])
 def getReleases():
     year = request.args.get('year')
     domain = getDomain()
@@ -116,7 +168,7 @@ def getReleases():
         return jsonify({"error": "Failed to get Releases from Github"}), max(acpStatus, iqStatus)
 
 
-@app.route('/getReleaseDetails', methods=['POST'])
+@app.route(f'{CONTEXT_PATH}/getReleaseDetails', methods=['POST'])
 def getReleaseDetails():
     year, release = request.json['year'], request.json['release']
     domain = getDomain()
@@ -130,7 +182,7 @@ def getReleaseDetails():
     })
 
 
-@app.route('/setupFileIQ', methods=['POST'])
+@app.route(f'{CONTEXT_PATH}/setupFileIQ', methods=['POST'])
 def setupFileIQ():
     y, r = (request.json.get(k) for k in ('year', 'release'))
 
@@ -145,7 +197,7 @@ def setupFileIQ():
     return jsonify({"outcome": outcome, "output": output})
 
 
-@app.route('/deployFiles', methods=['POST'])
+@app.route(f'{CONTEXT_PATH}/deployFiles', methods=['POST'])
 def deployFiles():
     r, wbUser, wbPass, node = (request.json.get(k)
                                for k in ('release', 'wbUser', 'wbPass', 'node'))
@@ -160,7 +212,7 @@ def deployFiles():
     return jsonify({"outcome": outcome, "node": node, "output": output})
 
 
-@app.route('/exportCfg', methods=['POST'])
+@app.route(f'{CONTEXT_PATH}/exportCfg', methods=['POST'])
 def exportCfg():
     y, r, f, c, p = (request.json.get(k)
                      for k in ('year', 'release', 'fromEnv', 'deepCompare', 'fromPass'))
@@ -182,7 +234,7 @@ def exportCfg():
     return jsonify({"outcome": outcome, "fromEnv": f.upper(), "output": output})
 
 
-@app.route('/deepCmp', methods=['POST'])
+@app.route(f'{CONTEXT_PATH}/deepCmp', methods=['POST'])
 def deepCmp():
     r, f, p = (request.json.get(k)
                for k in ('release', 'fromEnv', 'toPass'))
@@ -197,7 +249,7 @@ def deepCmp():
     return jsonify({"outcome": outcome, "fromEnv": f.upper(), "toEnv": t.upper(), "output": output})
 
 
-@app.route('/importCfg', methods=['POST'])
+@app.route(f'{CONTEXT_PATH}/importCfg', methods=['POST'])
 def importCfg():
     r, f, p = (request.json.get(k)
                for k in ('release', 'fromEnv', 'toPass'))
@@ -212,7 +264,7 @@ def importCfg():
     return jsonify({"outcome": outcome, "fromEnv": f.upper(), "toEnv": t.upper(), "output": output})
 
 
-@app.route('/stopNode', methods=['POST'])
+@app.route(f'{CONTEXT_PATH}/stopNode', methods=['POST'])
 def stopNode():
     idx, host, domain = request.json.get(
         'idx'), request.json.get('ip'), getDomain()
@@ -225,7 +277,7 @@ def stopNode():
     return jsonify({"outcome": "success", "output": output})
 
 
-@app.route('/startNode', methods=['POST'])
+@app.route(f'{CONTEXT_PATH}/startNode', methods=['POST'])
 def startNode():
     idx, host, domain = request.json.get(
         'idx'), request.json.get('ip'), getDomain()
@@ -246,7 +298,7 @@ def startNode():
         return jsonify({"outcome":  "error", "output": output + '\n' + output1})
 
 
-@app.route('/startWebforms', methods=['POST'])
+@app.route(f'{CONTEXT_PATH}/startWebforms', methods=['POST'])
 def startWebforms():
     domain = getDomain()
     client, channel = create_client(domain, None, domain.env['sudoUser'])
@@ -255,6 +307,51 @@ def startWebforms():
                                       channel, f'./acp import {f} {t}\n', p, r)
 
     return jsonify({"outcome": outcome, "fromEnv": f.upper(), "toEnv": t.upper(), "output": output})
+
+
+@app.route(f'{CONTEXT_PATH}/listFiles', methods=['GET'])
+def listFiles():
+    directory = request.args.get('dir')
+    if not directory:
+        return jsonify({"error": "Missing directory parameter"}), 400
+    files = get_files_in_directory(directory)
+    return jsonify({"files": files})
+
+
+@app.route(f'{CONTEXT_PATH}/downloadFile', methods=['GET'])
+def downloadFile():
+    directory = os.path.join(
+        '/u11/agile/agile936/acp/work', request.args.get('release'))
+    filename = request.args.get('filename')
+    if not directory or not filename:
+        return jsonify({"error": "Missing directory or filename parameter"}), 400
+
+    domain = getDomain()
+    host = request.args.get('host') or ACPHOST
+    user = domain.env.get('sudoUser', ACPUSER)
+
+    try:
+        client, channel = create_client(domain, host, user)
+        remote_path = f"/tmp/{filename}"
+        channel.send(f'cp {os.path.join(directory, filename)} {remote_path}\n')
+        time.sleep(1)
+
+        sftp = client.open_sftp()
+        if not sftp.stat(remote_path):
+            client.close()
+            return jsonify({"error": "File does not exist on remote server"}), 404
+
+        tmp_file = tempfile.NamedTemporaryFile(delete=False)
+        sftp.get(remote_path, tmp_file.name)
+        sftp.close()
+        client.close()
+
+        tmp_file.close()
+        return send_file(tmp_file.name, as_attachment=True, download_name=filename)
+    except FileNotFoundError:
+        return jsonify({"error": "File does not exist on remote server"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @app.errorhandler(AuthException)
@@ -290,4 +387,4 @@ def get_branch(env):
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5053, debug=True)
+    app.run(host='0.0.0.0', port=PORT, debug=True)

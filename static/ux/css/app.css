@@ -1,28 +1,13 @@
 .ux-header {
-  background: -moz-linear-gradient(
-    left,
-    #3892d4 5%,
-    #157fcc 50%,
-    #3892d4 95%
-  ); /* FF3.6+ */
+  background: -moz-linear-gradient(left, #3892d4 5%, #157fcc 50%, #3892d4 95%); /* FF3.6+ */
   background: -webkit-linear-gradient(
     left,
     #3892d4 5%,
     #157fcc 50%,
     #3892d4 95%
   ); /* Chrome10+,Safari5.1+ */
-  background: -ms-linear-gradient(
-    left,
-    #3892d4 5%,
-    #157fcc 50%,
-    #3892d4 95%
-  ); /* IE10+ */
-  background: linear-gradient(
-    left,
-    #3892d4 5%,
-    #157fcc 50%,
-    #3892d4 95%
-  ); /* W3C */
+  background: -ms-linear-gradient(left, #3892d4 5%, #157fcc 50%, #3892d4 95%); /* IE10+ */
+  background: linear-gradient(left, #3892d4 5%, #157fcc 50%, #3892d4 95%); /* W3C */
 }
 
 h1 {
@@ -262,4 +247,36 @@ div.searchResultItem button.action-button-disabled {
   overflow-y: auto;
   background-color: #fff;
   padding: 5px;
+}
+
+.copy-icon {
+  position: absolute;
+  top: 4px;
+  right: 0px;
+  cursor: pointer;
+  display: none;
+  font-size: 18px;
+  color: #007bff;
+}
+
+.save-icon {
+  position: absolute;
+  top: 4px;
+  right: 20px;
+  cursor: pointer;
+  display: none;
+  font-size: 18px;
+  color: #007bff;
+}
+
+.copy-container:hover .save-icon {
+  display: inline;
+}
+
+.copy-container:hover .copy-icon {
+  display: inline;
+}
+
+.copy-container {
+  position: relative;
 }

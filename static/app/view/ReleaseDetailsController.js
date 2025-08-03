@@ -69,8 +69,9 @@ Ext.define("Proteus.view.ReleaseDetailsController", {
               : result.outcome === "warning"
               ? `Configuration exported from ${result.fromEnv} with warnings`
               : `Failed to export configuration from ${result.fromEnv}`;
+          const filename = result.outcome === "success" ? null : "export.err";
 
-          me.logAction(result.outcome, msg, result.output, id);
+          me.logAction(result.outcome, msg, result.output, id, filename);
           if (result.outcome === "success") {
             vm.set("readyForImport", true);
             if (values.deepCompare == "Yes") me.runCompare(data);
@@ -81,7 +82,8 @@ Ext.define("Proteus.view.ReleaseDetailsController", {
             "error",
             `Failed to export configuration from ${data.fromEnv}`,
             `Status: ${status}\nMessage: ${msg}\nError: ${err}`,
-            id
+            id,
+            "export.err"
           );
         })
         .finally(() => {
@@ -110,14 +112,19 @@ Ext.define("Proteus.view.ReleaseDetailsController", {
             ? `Comparison completed with warnings between ${result.fromEnv} and ${result.toEnv}`
             : `Failed to compare configuration between ${result.fromEnv} and ${result.toEnv}`;
 
-        me.logAction(result.outcome, msg, result.output, id);
+        const filename =
+          result.outcome === "success"
+            ? result.output.match(/([^\/\s\\]+\.log\.xls)/)[1]
+            : "deep_compare.err";
+        me.logAction(result.outcome, msg, result.output, id, filename);
       })
       .catch(({ status: status, message: msg, error: err }) => {
         me.logAction(
           "error",
           `Failed to compare configuration between environments.`,
           `Status: ${status}\nMessage: ${msg}\nError: ${err}`,
-          id
+          id,
+          "deep_compare.err"
         );
       })
       .finally(() => {
@@ -154,8 +161,8 @@ Ext.define("Proteus.view.ReleaseDetailsController", {
               : result.outcome === "warning"
               ? `Configuration imported to ${data.toEnv} with warnings`
               : `Failed to import configuration to ${data.toEnv}`;
-
-          me.logAction(result.outcome, msg, result.output, id);
+          const filename = result.outcome === "success" ? null : "import.err";
+          me.logAction(result.outcome, msg, result.output, id, filename);
           if (result.outcome === "success") vm.set("importCompleted", true);
         })
         .catch(({ status: status, message: msg, error: err }) => {
@@ -163,7 +170,8 @@ Ext.define("Proteus.view.ReleaseDetailsController", {
             "error",
             `Failed to import configuration to ${data.toEnv}`,
             `Status: ${status}\nMessage: ${msg}\nError: ${err}`,
-            id
+            id,
+            "import.err"
           );
         })
         .finally(() => {
@@ -240,30 +248,30 @@ Ext.define("Proteus.view.ReleaseDetailsController", {
       vmMain = Ext.getCmp("main").getViewModel();
 
     vmMain.get("env").nodes.forEach((node) => {
-      const id = me.logAction(
+      const idStop = me.logAction(
         "pending",
         `Stopping Agile Managed Server on ${node.name}(${node.ip})`
       );
       Proteus.util.Client.post("/stopNode", node)
         .then(({ data: result }) => {
-          const msg =
+          const msgStop =
             result.outcome === "success"
               ? `Stopped Agile Managed Server on ${node.name}(${node.ip}) successfully`
               : `Failed to stop Agile Managed Server on ${node.name}(${node.ip})`;
-          me.logAction(result.outcome, msg, result.output, id);
+          me.logAction(result.outcome, msgStop, result.output, idStop);
           if (result.outcome === "success") {
-            const id1 = me.logAction(
+            const idStart = me.logAction(
               "pending",
               `Starting Agile Managed Server on ${node.name}(${node.ip})`
             );
             Proteus.util.Client.post("/startNode", node)
               .then(({ data: result }) => {
-                const msg1 =
+                const msgStart =
                   result.outcome === "success"
                     ? `Started Agile Managed Server on ${node.name}(${node.ip}) successfully`
                     : `Failed to start Agile Managed Server on ${node.name}(${node.ip})`;
 
-                me.logAction(result.outcome, msg1, result.output, id1);
+                me.logAction(result.outcome, msgStart, result.output, idStart);
 
                 if (result.outcome === "success" && node.isWFHost) {
                   me.startWebforms();
@@ -274,7 +282,7 @@ Ext.define("Proteus.view.ReleaseDetailsController", {
                   "error",
                   `Failed to start Agile Managed Server on ${node.name}(${node.ip})`,
                   `Status: ${status}\nMessage: ${msg}\nError: ${err}`,
-                  id1
+                  idStart
                 );
               });
           }
@@ -284,7 +292,7 @@ Ext.define("Proteus.view.ReleaseDetailsController", {
             "error",
             `Failed to stop Agile Managed Server on ${node.name}(${node.ip})`,
             `Status: ${status}\nMessage: ${msg}\nError: ${err}`,
-            id
+            idStop
           );
         })
         .finally(() => {
@@ -297,12 +305,13 @@ Ext.define("Proteus.view.ReleaseDetailsController", {
     console.log("Starting Webforms...");
   },
 
-  logAction: function (type, msg, details, id) {
+  logAction: function (type, msg, details, id, filename) {
     const vmMain = Ext.getCmp("main").getViewModel(),
       logs = vmMain.get("logs"),
       log = { id: id || Ext.id(), msg: msg, type: type };
 
     if (details) log.details = details;
+    if (filename) log.filename = filename;
 
     const index = logs.findIndex((log) => log.id === id);
     if (index !== -1) {

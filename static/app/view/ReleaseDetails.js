@@ -36,25 +36,6 @@ Ext.define("Proteus.view.ReleaseDetails", {
           },
           items: [
             {
-              xtype: "selectfield",
-              reference: "cmbOperations",
-              allowBlank: false,
-              required: true,
-              label: "Operation",
-              name: "operation",
-              placeholder: "Operations",
-              errorTarget: "side",
-              store: [
-                { id: 1, name: "1-Cfg Transfer" },
-                { id: 2, name: "2-File Transfer" },
-                { id: 3, name: "3-Cfg & File Transfer" },
-              ],
-              displayField: "name",
-              valueField: "id",
-              value: 3,
-              forceSelection: true,
-            },
-            {
               xtype: "combobox",
               reference: "cmbyear",
               required: true,

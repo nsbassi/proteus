@@ -1,6 +1,7 @@
 import paramiko
 import time
 import re
+import os
 
 
 SCRDIR = "/patch/PLM/IQ/scripts"
@@ -44,7 +45,7 @@ def execute_acp_cmd(client, channel, cmd, password, rel):
     time.sleep(1)
     channel.send(cmd)
 
-    timeout = 3
+    timeout = 5
     start_time = time.time()
     output = ""
     while True:
@@ -60,7 +61,7 @@ def execute_acp_cmd(client, channel, cmd, password, rel):
         else:
             time.sleep(0.1)
 
-    output += read_shell_output(channel)
+    output += read_shell_output(channel, timeout=30)
     client.close()
 
     return output, getOutcome(output)
@@ -94,6 +95,14 @@ def execute_iq_cmd(client, channel, rel, branch, wluser, wlpass, token):
 
     client.close()
 
+    # Mask wlpass & Github token in the output before returning
+    if wlpass:
+        masked_wlpass = '*' * len(wlpass)
+        output = output.replace(wlpass, masked_wlpass)
+    if token:
+        masked_token = '*' * len(token)
+        output = output.replace(token, masked_token)
+
     return output, outcome
 
 
@@ -117,6 +126,10 @@ def execute_setup(channel, year, rel, branch, opr, token):
         else:
             time.sleep(0.1)
 
+    if token:
+        masked_token = '*' * len(token)
+        output = output.replace(token, masked_token)
+
     return acp_ready, output
 
 
@@ -134,7 +147,7 @@ def execute_cmd(client, channel, command):
     return stdout.read().decode().strip(), stderr.read().decode().strip()
 
 
-def read_shell_output(shell, timeout=10):
+def read_shell_output(shell, break_on=None, timeout=10):
     output = ""
     start_time = time.time()
 
@@ -143,6 +156,8 @@ def read_shell_output(shell, timeout=10):
             output += shell.recv(65535).decode()
             start_time = time.time()
         elif time.time() - start_time > timeout:
+            break
+        elif break_on is not None and re.search(break_on, output) is not None:
             break
         else:
             time.sleep(0.1)
@@ -157,3 +172,21 @@ def getOutcome(output):
         return "success" if error_level == 0 else "warning" if error_level < 0 else "error"
     else:
         return "error"
+
+
+def list_files(directory_path):
+    try:
+        return [f for f in os.listdir(directory_path) if os.path.isfile(os.path.join(directory_path, f))]
+    except Exception as e:
+        print(f"Error listing files in {directory_path}: {e}")
+        return []
+
+
+def downloadFile(client, remote_path, local_path):
+    try:
+        sftp = client.open_sftp()
+        sftp.get(remote_path, local_path)
+        sftp.close()
+        return True, None
+    except Exception as e:
+        return False, str(e)
