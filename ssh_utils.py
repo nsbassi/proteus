@@ -18,6 +18,9 @@ def create_client(domain, host=None, sudoUser=None):
         channel = client.invoke_shell()
         channel.send(f'sudo su - {sudoUser}\n')
         time.sleep(1)
+        channel.send(
+            'export HISTFILE=/dev/null; unset HISTFILE; export HISTSIZE=0; export HISTFILESIZE=0\n')
+        time.sleep(1)
         return client, channel
     return client, None
 
