@@ -28,14 +28,11 @@ Ext.define("Proteus.view.Login", {
       bind: {
         disabled: "{loading}",
       },
-      defaults: {
-        labelTextAlign: 'right',
-        labelWidth: 150,
-        width: 330
-      }
+
       items: [
         {
           xtype: "component",
+          width: 280,
           height: 27,
           html: "Login",
           style: {
@@ -53,6 +50,7 @@ Ext.define("Proteus.view.Login", {
             " Login Failure</span>" +
             "</tpl>",
           height: 26,
+          width: 280,
           style: {
             "font-size": "20px",
             "text-align": "center",
@@ -63,6 +61,7 @@ Ext.define("Proteus.view.Login", {
           xtype: "textfield",
           validateOnInit: false,
           required: true,
+          width: 280,
           label: "Linux OS User",
           name: "username",
           placeholder: "OS username",
@@ -75,6 +74,7 @@ Ext.define("Proteus.view.Login", {
           xtype: "passwordfield",
           validateOnInit: false,
           required: true,
+          width: 280,
           label: "Password",
           name: "password",
           placeholder: "Password",
@@ -87,6 +87,7 @@ Ext.define("Proteus.view.Login", {
           xtype: "passwordfield",
           validateOnInit: false,
           required: true,
+          width: 280,
           label: "GitHub Token",
           name: "token",
           placeholder: "Auth Token",
@@ -99,6 +100,7 @@ Ext.define("Proteus.view.Login", {
           xtype: "combobox",
           validateOnInit: false,
           required: true,
+          width: 280,
           label: "Target Environment",
           name: "environment",
           placeholder: "Environment QA/Prod",
@@ -117,6 +119,7 @@ Ext.define("Proteus.view.Login", {
           text: "LOG IN",
           autoSize: true,
           handler: "onLogin",
+          width: 280,
           ui: "action",
           margin: "30 0 0 0",
           bind: {

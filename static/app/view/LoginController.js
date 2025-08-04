@@ -11,7 +11,7 @@ Ext.define("Proteus.view.LoginController", {
     vm.set("loading", true);
     if (form.validate()) {
       const values = form.getValues();
-      Proteus.util.Client.post("/login", values)
+      Proteus.util.Client.post("login", values)
         .then(({ data: responseData }) => {
           sessionStorage.setItem("_proteus_loggged_in_", true);
           return Proteus.getApplication().initApp({

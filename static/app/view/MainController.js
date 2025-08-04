@@ -13,12 +13,7 @@ Ext.define("Proteus.view.MainController", {
   downloadFile: function (fileName) {
     const release = Ext.getCmp("releasePanel").getViewModel().get("release");
     const link = document.createElement("a");
-    link.href =
-      Proteus.util.Client.buildURL("/downloadFile") +
-      "?release=" +
-      release +
-      "&filename=" +
-      fileName;
+    link.href = "downloadFile?release=" + release + "&filename=" + fileName;
     link.download = fileName;
     document.body.appendChild(link);
     link.click();

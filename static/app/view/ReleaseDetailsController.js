@@ -23,7 +23,7 @@ Ext.define("Proteus.view.ReleaseDetailsController", {
     form.disable();
     if (form.validate()) {
       var values = form.getValues();
-      Proteus.util.Client.post("/getReleaseDetails", values)
+      Proteus.util.Client.post("getReleaseDetails", values)
         .then(({ data: result }) => {
           vm.set("acp", result.acp || false);
           vm.set("fileTp", result.iq || false);
@@ -61,7 +61,7 @@ Ext.define("Proteus.view.ReleaseDetailsController", {
       form.setMasked({ xtype: "loadmask", cls: "custom-mask", message: "" });
       const id = me.logAction("pending", `Exporting configuration from ${data.fromEnv}`);
 
-      Proteus.util.Client.post("/exportCfg", data)
+      Proteus.util.Client.post("exportCfg", data)
         .then(({ data: result }) => {
           const msg =
             result.outcome === "success"
@@ -103,7 +103,7 @@ Ext.define("Proteus.view.ReleaseDetailsController", {
       `Running deep compare between ${data.fromEnv.toUpperCase()} and ${data.toEnv}`
     );
 
-    Proteus.util.Client.post("/deepCmp", data)
+    Proteus.util.Client.post("deepCmp", data)
       .then(({ data: result }) => {
         const msg =
           result.outcome === "success"
@@ -153,7 +153,7 @@ Ext.define("Proteus.view.ReleaseDetailsController", {
         `Importing configuration from ${data.fromEnv} to ${data.toEnv}`
       );
 
-      Proteus.util.Client.post("/importCfg", data)
+      Proteus.util.Client.post("importCfg", data)
         .then(({ data: result }) => {
           const msg =
             result.outcome === "success"
@@ -198,7 +198,7 @@ Ext.define("Proteus.view.ReleaseDetailsController", {
       "pending",
       `Performing file deployment setup for ${data.release} release`
     );
-    Proteus.util.Client.post("/setupFileIQ", data).then(({ data: result }) => {
+    Proteus.util.Client.post("setupFileIQ", data).then(({ data: result }) => {
       if (result.outcome === "success") {
         me.logAction(
           result.outcome,
@@ -212,7 +212,7 @@ Ext.define("Proteus.view.ReleaseDetailsController", {
             `Starting file deployment on ${node.name}(${node.ip})`
           );
           data.node = node;
-          Proteus.util.Client.post("/deployFiles", data)
+          Proteus.util.Client.post("deployFiles", data)
             .then(({ data: result }) => {
               const msg =
                 result.outcome === "success"
@@ -252,7 +252,7 @@ Ext.define("Proteus.view.ReleaseDetailsController", {
         "pending",
         `Stopping Agile Managed Server on ${node.name}(${node.ip})`
       );
-      Proteus.util.Client.post("/stopNode", node)
+      Proteus.util.Client.post("stopNode", node)
         .then(({ data: result }) => {
           const msgStop =
             result.outcome === "success"
@@ -264,7 +264,7 @@ Ext.define("Proteus.view.ReleaseDetailsController", {
               "pending",
               `Starting Agile Managed Server on ${node.name}(${node.ip})`
             );
-            Proteus.util.Client.post("/startNode", node)
+            Proteus.util.Client.post("startNode", node)
               .then(({ data: result }) => {
                 const msgStart =
                   result.outcome === "success"

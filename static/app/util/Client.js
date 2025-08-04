@@ -12,7 +12,7 @@ Ext.define("Proteus.util.Client", {
   request: function (method, url, options) {
     return new Promise((resolve, reject) => {
       Ext.Ajax.request({
-        url: this.buildURL(url),
+        url: url,
         method: method,
         ...options,
         timeout: 600000,
@@ -36,11 +36,5 @@ Ext.define("Proteus.util.Client", {
         },
       });
     });
-  },
-
-  buildURL: function (suffix) {
-    const cp = document.querySelector("head meta[name='X-Proteus-Context']")?.content || "";
-    if (!cp) return suffix;
-    return !/^cp/.test(suffix) ? cp + (!/^\//.test(suffix) ? "/" : "") + suffix : suffix;
   },
 });

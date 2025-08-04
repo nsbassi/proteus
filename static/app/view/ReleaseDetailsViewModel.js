@@ -33,7 +33,7 @@ Ext.define("Proteus.view.ReleaseDetailsViewModel", {
       fields: ["id"],
       proxy: {
         type: "ajax",
-        url: Proteus.util.Client.buildURL("/getYears"),
+        url: "getYears",
         reader: {
           type: "json",
           rootProperty: "",
@@ -57,7 +57,7 @@ Ext.define("Proteus.view.ReleaseDetailsViewModel", {
       fields: ["id"],
       proxy: {
         type: "ajax",
-        url: Proteus.util.Client.buildURL("/getReleases"),
+        url: "getReleases",
         reader: {
           type: "json",
           rootProperty: "",

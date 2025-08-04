@@ -10,10 +10,15 @@ from ssh_utils import SCRDIR, list_files, downloadFile
 import traceback
 import tempfile
 from flask import send_file
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 
 app = Flask(__name__, static_folder=None)
 app.secret_key = os.urandom(24).hex()
+
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1,
+                        x_host=1, x_port=1, x_prefix=1)
+app.config['SESSION_COOKIE_SECURE'] = True
 
 # Read context path, host, and port from env or sys.argv
 CONTEXT_PATH = os.environ.get("PROTEUS_CONTEXT_PATH", "/proteus")
@@ -64,10 +69,12 @@ def custom_static_data(filename):
 def static_file_path(dir, filename):
     dirPath = os.path.join(os.getcwd(), "static", dir)
     if os.path.isfile(os.path.join(dirPath, filename)):
+        print(f"Serving {filename} from {dirPath}")
         return send_from_directory(dirPath, filename)
     else:
-        dirPath = os.path.join(get_static_dir(), dir, filename)
+        dirPath = os.path.join(get_static_dir(), dir)
         if os.path.isfile(os.path.join(dirPath, filename)):
+            print(f"Serving {filename} from {dirPath}")
             return send_from_directory(dirPath, filename)
     return jsonify({"error": "File not found"}), 404
 

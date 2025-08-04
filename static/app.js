@@ -17,7 +17,7 @@ Ext.application({
     if (loggedIn) {
       try {
         const response = await Ext.Ajax.request({
-          url: Proteus.util.Client.buildURL("/restoreSession"),
+          url: "restoreSession",
           method: "GET",
         });
 
